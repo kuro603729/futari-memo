@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#E06D53" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="ふたりメモ" />
+    <link rel="manifest" href="./manifest.json" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <script src="./firebase-config.js" onerror="window.FUTARI_CONFIG=null"></script>
+  <title>ふたりメモ - 夫婦共有リマインダー</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg-warm: #FAF8F5;
+      --surface: #FFFFFF;
+      --border-soft: #EAE5DD;
+      --p1: #E06D53;
+      --p1-soft: #FDF0ED;
+      --p2: #2A8C82;
+      --p2-soft: #EAF6F4;
+      --both: #D98A2B;
+      --both-soft: #FEF6EA;
+      --event-bg: #EEF2FF;
+      --event-border: #818CF8;
+      --event-text: #3730A3;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: 'Noto Sans JP', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg-warm);
+      color: #292524;
+      margin: 0;
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .tap-btn { transition: transform 0.1s ease, opacity 0.15s ease; }
+    .tap-btn:active { transform: scale(0.96); }
+    @keyframes slideUp {
+      from { transform: translateY(16px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    .animate-slide-up { animation: slideUp 0.2s ease-out; }
+    @keyframes popIn {
+      from { transform: scale(0.94); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    .animate-pop { animation: popIn 0.18s ease-out; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- ==================== 4-DIGIT PIN LOCK OVERLAY ==================== -->
+  <div id="pin-overlay" class="fixed inset-0 z-50 bg-[#FAF8F5] flex flex-col items-center justify-center p-6 hidden">
+    <div class="w-full max-w-xs text-center animate-pop">
+      <div class="w-14 h-14 mx-auto mb-4 rounded-2xl bg-[#E06D53] flex items-center justify-center shadow-md">
+        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+        </svg>
+      </div>
+      <h1 class="text-xl font-bold text-stone-800 mb-1">ふたりメモ</h1>
+      <p class="text-xs text-stone-500 mb-5">共有ルームの4桁PINを入力（初回のみ・端末に保存されます）</p>
+
+      <div id="pin-dots" class="flex justify-center gap-3 mb-3">
+        <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-stone-300 bg-white"></span>
+        <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-stone-300 bg-white"></span>
+        <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-stone-300 bg-white"></span>
+        <span class="pin-dot w-3.5 h-3.5 rounded-full border-2 border-stone-300 bg-white"></span>
+      </div>
+      <p id="pin-error" class="text-xs text-red-600 h-4 mb-3 font-medium"></p>
+
+      <div class="grid grid-cols-3 gap-3 max-w-[240px] mx-auto mb-4">
+        <button type="button" data-pin="1" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">1</button>
+        <button type="button" data-pin="2" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">2</button>
+        <button type="button" data-pin="3" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">3</button>
+        <button type="button" data-pin="4" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">4</button>
+        <button type="button" data-pin="5" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">5</button>
+        <button type="button" data-pin="6" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">6</button>
+        <button type="button" data-pin="7" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">7</button>
+        <button type="button" data-pin="8" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">8</button>
+        <button type="button" data-pin="9" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">9</button>
+        <div class="h-14"></div>
+        <button type="button" data-pin="0" class="pin-key tap-btn h-14 rounded-2xl bg-white border border-stone-200 text-lg font-semibold text-stone-800 shadow-sm hover:bg-stone-50">0</button>
+        <button type="button" id="pin-backspace" class="tap-btn h-14 rounded-2xl bg-stone-100 text-sm font-semibold text-stone-600 hover:bg-stone-200 flex items-center justify-center">削除</button>
+      </div>
+
+      <button type="button" id="pin-demo-btn" class="tap-btn text-xs font-medium text-[#E06D53] bg-[#FDF0ED] px-4 py-2 rounded-full border border-[#E06D53]/30">
+        デモ用PIN「1234」で入る
+      </button>
+    </div>
+  </div>
+
+  <!-- ==================== INITIAL SETUP / SETTINGS MODAL ==================== -->
+  <div id="setup-modal" class="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px] flex items-end sm:items-center justify-center p-0 sm:p-4 hidden">
+    <div class="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 shadow-xl animate-slide-up max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <div>
+          <h2 id="setup-title" class="text-lg font-bold text-stone-800">ふたりの初期設定</h2>
+          <p class="text-xs text-stone-500">呼び名と、この端末を使う人を選んでください</p>
+        </div>
+        <button type="button" id="setup-close-btn" class="p-2 rounded-full text-stone-400 hover:bg-stone-100 hidden" aria-label="閉じる">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs font-semibold text-[#E06D53] mb-1">1人目の名前</label>
+            <input id="input-p1-name" type="text" maxlength="10" placeholder="例: パパ / 夫" class="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#E06D53]/40" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-[#2A8C82] mb-1">2人目の名前</label>
+            <input id="input-p2-name" type="text" maxlength="10" placeholder="例: ママ / 妻" class="w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#2A8C82]/40" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-stone-600 mb-1.5">この端末はどっち？</label>
+          <div class="grid grid-cols-2 gap-2.5">
+            <button type="button" id="role-btn-p1" class="tap-btn py-3 px-3 rounded-xl border-2 text-sm font-bold flex items-center justify-center gap-2 transition">
+              <span class="w-3 h-3 rounded-full bg-[#E06D53]"></span>
+              <span id="role-label-p1">パパ</span>
+            </button>
+            <button type="button" id="role-btn-p2" class="tap-btn py-3 px-3 rounded-xl border-2 text-sm font-bold flex items-center justify-center gap-2 transition">
+              <span class="w-3 h-3 rounded-full bg-[#2A8C82]"></span>
+              <span id="role-label-p2">ママ</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="pt-2 border-t border-stone-100 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-xs font-semibold text-stone-700">共有ルームPIN（4桁）</p>
+              <p class="text-[11px] text-stone-400">パートナーと同じPINを共有します</p>
+            </div>
+            <input id="input-room-pin" type="tel" maxlength="4" pattern="[0-9]*" class="w-20 text-center px-2 py-1.5 rounded-lg border border-stone-200 text-sm font-mono font-bold tracking-widest" />
+          </div>
+
+          <div class="flex items-center justify-between bg-stone-50 p-2.5 rounded-xl">
+            <div class="min-w-0 pr-2">
+              <p class="text-[11px] font-semibold text-stone-600">共有ルームURL</p>
+              <p id="room-url-preview" class="text-[11px] text-stone-400 truncate font-mono"></p>
+            </div>
+            <button type="button" id="copy-room-url-btn" class="tap-btn shrink-0 px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-xs font-semibold text-stone-700 hover:bg-stone-100">
+              コピー
+            </button>
+          </div>
+        </div>
+
+        <div id="demo-tools-box" class="bg-amber-50/80 border border-amber-200/80 rounded-xl p-3 space-y-2">
+          <p class="text-xs font-bold text-amber-800">デモモード検証ツール</p>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" id="sim-partner-add-btn" class="tap-btn px-3 py-1.5 rounded-lg bg-white border border-amber-300 text-xs font-semibold text-amber-900">
+              パートナーの追加をシミュレート（通知A）
+            </button>
+            <button type="button" id="reset-demo-btn" class="tap-btn px-3 py-1.5 rounded-lg bg-white border border-stone-200 text-xs font-medium text-stone-600">
+              デモデータ初期化
+            </button>
+          </div>
+        </div>
+
+        <button type="button" id="setup-save-btn" class="tap-btn w-full py-3 rounded-2xl bg-[#E06D53] text-white font-bold text-sm shadow-sm hover:opacity-95">
+          保存してはじめる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== HEADER ==================== -->
+  <header class="sticky top-0 z-20 bg-[#FAF8F5]/95 backdrop-blur-sm border-b border-[#EAE5DD] px-3 sm:px-5 py-2.5">
+    <div class="max-w-4xl mx-auto flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-8 h-8 rounded-xl bg-[#E06D53] flex items-center justify-center shrink-0 shadow-sm">
+          <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+          </svg>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5">
+            <h1 class="text-base font-bold text-stone-800 tracking-tight truncate">ふたりメモ</h1>
+            <span id="sync-badge" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-100 text-amber-800">
+              <span class="w-1.5 h-1.5 rounded-full bg-amber-500"></span>デモ
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button type="button" id="header-role-btn" class="tap-btn flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-white border border-[#EAE5DD] text-xs font-semibold text-stone-700 shadow-2xs">
+          <span id="header-role-dot" class="w-2.5 h-2.5 rounded-full bg-[#E06D53]"></span>
+          <span id="header-role-name">パパ</span>
+        </button>
+
+        <button type="button" id="notif-btn" class="tap-btn p-2 rounded-full bg-white border border-[#EAE5DD] text-stone-600 hover:bg-stone-50 relative" title="プッシュ通知設定">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+          </svg>
+          <span id="notif-dot" class="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#E06D53] hidden"></span>
+        </button>
+
+        <button type="button" id="open-settings-btn" class="tap-btn p-2 rounded-full bg-white border border-[#EAE5DD] text-stone-600 hover:bg-stone-50" title="設定">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==================== IN-APP PUSH NOTIFICATION BANNER (Notification A / B preview) ==================== -->
+  <div id="push-banner" class="fixed top-14 left-1/2 -translate-x-1/2 z-30 w-[92%] max-w-md bg-stone-900 text-white px-4 py-3 rounded-2xl shadow-lg flex items-start gap-3 hidden animate-slide-up">
+    <div class="w-8 h-8 rounded-xl bg-[#2A8C82] flex items-center justify-center shrink-0 mt-0.5">
+      <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+    </div>
+    <div class="flex-1 min-w-0">
+      <p id="push-banner-title" class="text-xs font-bold text-amber-300"></p>
+      <p id="push-banner-body" class="text-xs text-stone-100 mt-0.5"></p>
+    </div>
+    <button type="button" id="push-banner-close" class="text-stone-400 hover:text-white text-xs p-1">✕</button>
+  </div>
+
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="flex-1 w-full max-w-4xl mx-auto px-2.5 sm:px-5 pt-3 pb-44 space-y-3">
+
+    <!-- 1. "いつでも" (Unscheduled) Compact Tray -->
+    <section class="bg-white rounded-2xl border border-[#EAE5DD] p-3 shadow-2xs">
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-1.5">
+          <span class="text-xs font-bold text-stone-700">📌 いつでも（期限なし）</span>
+          <span id="anytime-count" class="px-1.5 py-0.5 rounded-full bg-stone-100 text-[11px] font-semibold text-stone-600">0</span>
+        </div>
+        <button type="button" id="add-anytime-quick-btn" class="tap-btn text-[11px] font-semibold text-[#E06D53] hover:underline">
+          + いつでもに追加
+        </button>
+      </div>
+      <div id="anytime-list" class="flex flex-wrap gap-1.5">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- 2. Calendar Controls (1W / 2W / 4W / 8W + Navigation + Legend) -->
+    <section class="bg-white rounded-2xl border border-[#EAE5DD] p-3 shadow-2xs space-y-2.5">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <!-- Week Switcher -->
+        <div class="inline-flex bg-stone-100 p-1 rounded-xl" role="group" aria-label="表示期間">
+          <button type="button" data-weeks="1" class="week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-stone-600">1週間</button>
+          <button type="button" data-weeks="2" class="week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-semibold bg-white text-stone-900 shadow-2xs">2週間</button>
+          <button type="button" data-weeks="4" class="week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-stone-600">4週間</button>
+          <button type="button" data-weeks="8" class="week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-stone-600">8週間</button>
+        </div>
+
+        <!-- Date Range Nav -->
+        <div class="flex items-center gap-1.5">
+          <button type="button" id="cal-prev-btn" class="tap-btn w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50" aria-label="前の期間">‹</button>
+          <button type="button" id="cal-today-btn" class="tap-btn px-2.5 h-7 rounded-lg border border-stone-200 text-xs font-semibold text-stone-700 hover:bg-stone-50">今日</button>
+          <button type="button" id="cal-next-btn" class="tap-btn w-7 h-7 rounded-lg border border-stone-200 flex items-center justify-center text-stone-600 hover:bg-stone-50" aria-label="次の期間">›</button>
+          <span id="cal-range-label" class="text-xs font-bold text-stone-700 ml-1"></span>
+        </div>
+      </div>
+
+      <!-- Legend -->
+      <div class="flex flex-wrap items-center gap-3 text-[11px] text-stone-500">
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#E06D53]"></span><span id="legend-p1">パパ</span></span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#2A8C82]"></span><span id="legend-p2">ママ</span></span>
+        <span class="inline-flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-[#D98A2B]"></span>どっちでも</span>
+        <span class="inline-flex items-center gap-1"><span class="w-4 h-2.5 rounded bg-[#EEF2FF] border border-[#818CF8]"></span>複数日予定</span>
+      </div>
+
+      <!-- Weekday Header -->
+      <div class="grid grid-cols-7 gap-1 text-center text-[11px] font-bold text-stone-500 pb-1 border-b border-stone-100">
+        <div>月</div><div>火</div><div>水</div><div>木</div><div>金</div>
+        <div class="text-sky-600">土</div><div class="text-rose-500">日</div>
+      </div>
+
+      <!-- Calendar Grid -->
+      <div id="calendar-grid" class="space-y-1">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- 3. Selected Day Detail Card -->
+    <section id="day-detail-card" class="bg-white rounded-2xl border border-[#EAE5DD] p-3.5 shadow-2xs">
+      <div class="flex items-center justify-between mb-2.5">
+        <div>
+          <h2 id="selected-day-title" class="text-sm font-bold text-stone-800"></h2>
+          <p id="selected-day-subtitle" class="text-[11px] text-stone-400"></p>
+        </div>
+        <button type="button" id="add-on-selected-day-btn" class="tap-btn px-3 py-1.5 rounded-xl bg-[#FDF0ED] text-[#E06D53] text-xs font-bold border border-[#E06D53]/25">
+          + この日に追加
+        </button>
+      </div>
+      <div id="selected-day-events" class="space-y-1.5 mb-2"></div>
+      <div id="selected-day-tasks" class="space-y-2"></div>
+    </section>
+
+    <!-- 4. Completed Tasks (Collapsible) -->
+    <section class="bg-white/80 rounded-2xl border border-[#EAE5DD] p-3">
+      <button type="button" id="toggle-completed-btn" class="w-full flex items-center justify-between text-left">
+        <span class="text-xs font-bold text-stone-500">
+          ✅ 完了済み（<span id="completed-count">0</span>件）
+        </span>
+        <span id="completed-chevron" class="text-xs text-stone-400">開く ▼</span>
+      </button>
+      <div id="completed-list" class="mt-2.5 space-y-1.5 hidden">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+  </main>
+
+  <!-- ==================== UNDO TOAST ==================== -->
+  <div id="undo-toast" class="fixed bottom-36 left-1/2 -translate-x-1/2 z-30 bg-stone-800 text-white px-4 py-2.5 rounded-full shadow-lg flex items-center gap-3 text-xs font-medium hidden animate-slide-up">
+    <span id="undo-toast-msg">完了にしました</span>
+    <button type="button" id="undo-action-btn" class="text-amber-300 font-bold underline">元に戻す</button>
+  </div>
+
+  <!-- ==================== FIXED BOTTOM QUICK INPUT BAR (3-second registration) ==================== -->
+  <div class="fixed bottom-0 inset-x-0 z-20 bg-white/95 backdrop-blur-md border-t border-[#EAE5DD] shadow-[0_-4px_20px_rgba(0,0,0,0.06)] px-3 pt-2 pb-[max(0.65rem,env(safe-area-inset-bottom))]">
+    <div class="max-w-4xl mx-auto space-y-2">
+      <!-- Mode Tabs + Collapse Toggle -->
+      <div class="flex items-center justify-between gap-2">
+        <div class="inline-flex bg-stone-100 p-0.5 rounded-xl">
+          <button type="button" id="mode-task-btn" class="tap-btn px-3 py-1 rounded-lg text-xs font-bold bg-white text-stone-800 shadow-2xs">✓ タスク</button>
+          <button type="button" id="mode-event-btn" class="tap-btn px-3 py-1 rounded-lg text-xs font-bold text-stone-500">📅 複数日予定</button>
+        </div>
+        <button type="button" id="toggle-quick-options-btn" class="text-[11px] font-semibold text-stone-500 px-2 py-1 rounded-lg hover:bg-stone-100">
+          詳細オプション ▲
+        </button>
+      </div>
+
+      <!-- Task Mode Form -->
+      <form id="quick-task-form" class="space-y-2">
+        <div class="flex items-center gap-2">
+          <input id="qt-title" type="text" required placeholder="やることを入力（例: おむつ買う、ゴミ出し）" class="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-stone-50 border border-stone-200 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-[#E06D53]/40" />
+          <button type="submit" class="tap-btn shrink-0 px-4 py-2.5 rounded-xl bg-[#E06D53] text-white text-sm font-bold shadow-xs hover:opacity-95">
+            追加
+          </button>
+        </div>
+
+        <!-- Expandable 1-tap Options (visible by default for 3-second single-screen completion, collapsible if desired) -->
+        <div id="qt-options" class="space-y-2 pt-0.5">
+          <!-- Assignee (3 choices) + Reminder Toggle -->
+          <div class="flex flex-wrap items-center justify-between gap-1.5">
+            <div class="flex items-center gap-1" role="group" aria-label="担当者">
+              <button type="button" data-assignee="p1" class="qt-assignee-btn tap-btn px-2.5 py-1 rounded-full text-xs font-bold border transition"></button>
+              <button type="button" data-assignee="p2" class="qt-assignee-btn tap-btn px-2.5 py-1 rounded-full text-xs font-bold border transition"></button>
+              <button type="button" data-assignee="both" class="qt-assignee-btn tap-btn px-2.5 py-1 rounded-full text-xs font-bold border transition">どっちでも</button>
+            </div>
+
+            <button type="button" id="qt-reminder-btn" class="tap-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border transition">
+              <span>🔔</span><span id="qt-reminder-label">期限前通知 ON</span>
+            </button>
+          </div>
+
+          <!-- Due Date Quick Chips + Date Picker + Optional Memo -->
+          <div class="flex flex-wrap items-center gap-1.5">
+            <button type="button" data-due="today" class="qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold border">今日</button>
+            <button type="button" data-due="tomorrow" class="qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold border">明日</button>
+            <button type="button" data-due="weekend" class="qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold border">今週中</button>
+            <button type="button" data-due="anytime" class="qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold border">いつでも</button>
+            <input id="qt-date-input" type="date" class="px-2 py-0.5 rounded-lg border border-stone-200 text-[11px] text-stone-600 bg-stone-50" aria-label="日付を指定" />
+            <input id="qt-memo" type="text" placeholder="1行メモ（例: 出張前の準備）" class="flex-1 min-w-[140px] px-2.5 py-1 rounded-lg border border-stone-200 text-[11px] bg-stone-50 focus:outline-none focus:bg-white" />
+          </div>
+        </div>
+      </form>
+
+      <!-- Multi-day Event Mode Form -->
+      <form id="quick-event-form" class="space-y-2 hidden">
+        <div class="flex items-center gap-2">
+          <input id="qe-title" type="text" required placeholder="複数日予定（例: パパ出張、実家帰省）" class="flex-1 min-w-0 px-3.5 py-2.5 rounded-xl bg-indigo-50/50 border border-indigo-200 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-indigo-400/40" />
+          <button type="submit" class="tap-btn shrink-0 px-4 py-2.5 rounded-xl bg-indigo-600 text-white text-sm font-bold shadow-xs hover:opacity-95">
+            登録
+          </button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2 text-xs">
+          <label class="flex items-center gap-1 text-stone-600 font-medium">
+            開始 <input id="qe-start" type="date" required class="px-2 py-1 rounded-lg border border-stone-200 bg-stone-50 text-xs" />
+          </label>
+          <span class="text-stone-400">〜</span>
+          <label class="flex items-center gap-1 text-stone-600 font-medium">
+            終了 <input id="qe-end" type="date" required class="px-2 py-1 rounded-lg border border-stone-200 bg-stone-50 text-xs" />
+          </label>
+          <div class="flex items-center gap-1 ml-auto">
+            <button type="button" data-ev-owner="p1" class="qe-owner-btn tap-btn px-2 py-1 rounded-full text-[11px] font-bold border"></button>
+            <button type="button" data-ev-owner="p2" class="qe-owner-btn tap-btn px-2 py-1 rounded-full text-[11px] font-bold border"></button>
+            <button type="button" data-ev-owner="both" class="qe-owner-btn tap-btn px-2 py-1 rounded-full text-[11px] font-bold border">ふたり</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // ==========================================
+      // Date Helpers (Local Timezone Safe)
+      // ==========================================
+      function toYMD(d) {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      }
+      function parseYMD(str) {
+        const [y, m, d] = str.split('-').map(Number);
+        return new Date(y, m - 1, d);
+      }
+      function addDays(d, n) {
+        const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        copy.setDate(copy.getDate() + n);
+        return copy;
+      }
+      function getMondayOfWeek(d) {
+        const copy = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const day = copy.getDay(); // 0=Sun, 1=Mon...
+        const diff = day === 0 ? -6 : 1 - day;
+        copy.setDate(copy.getDate() + diff);
+        return copy;
+      }
+      function getThisSunday(d) {
+        return addDays(getMondayOfWeek(d), 6);
+      }
+      function formatJPDate(ymd) {
+        const d = parseYMD(ymd);
+        const w = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
+        return `${d.getMonth() + 1}月${d.getDate()}日（${w}）`;
+      }
+      function formatShortMD(d) {
+        return `${d.getMonth() + 1}/${d.getDate()}`;
+      }
+
+      // ==========================================
+      // Storage & Room State
+      // ==========================================
+      const urlParams = new URLSearchParams(window.location.search);
+      const ROOM_ID = urlParams.get('room') || 'demo-room-futari2026';
+      const STORAGE_KEY = `futari_memo_data_${ROOM_ID}`;
+      const AUTH_KEY = `futari_memo_auth_${ROOM_ID}`;
+      const DEVICE_ROLE_KEY = `futari_memo_role_${ROOM_ID}`;
+
+      const today = new Date();
+      const todayYMD = toYMD(today);
+
+      function buildDefaultData() {
+        const t1 = toYMD(addDays(today, 1));
+        const t2 = toYMD(addDays(today, 2));
+        const t4 = toYMD(addDays(today, 4));
+        const t5 = toYMD(addDays(today, 5));
+        const t7 = toYMD(addDays(today, 7));
+        const t9 = toYMD(addDays(today, 9));
+        return {
+          room: {
+            partner1Name: 'パパ',
+            partner2Name: 'ママ',
+            pin: '1234',
+            configured: false
+          },
+          tasks: [
+            { id: 't1', title: 'おむつLサイズ買い足す', memo: 'ドラッグストア特売', assignee: 'both', dueDate: todayYMD, reminderEnabled: true, completed: false, createdAt: Date.now() - 50000 },
+            { id: 't2', title: '保育園の連絡帳アプリ入力', memo: '', assignee: 'p2', dueDate: todayYMD, reminderEnabled: true, completed: false, createdAt: Date.now() - 40000 },
+            { id: 't3', title: '燃えるゴミ出し（朝8時まで）', memo: '玄関の袋もまとめる', assignee: 'p1', dueDate: t1, reminderEnabled: true, completed: false, createdAt: Date.now() - 30000 },
+            { id: 't4', title: '出張前の食材買いだめ', memo: '冷凍うどん・牛乳・パン', assignee: 'both', dueDate: t2, reminderEnabled: true, completed: false, createdAt: Date.now() - 25000 },
+            { id: 't5', title: '小児科の予防接種予約', memo: '母子手帳確認する', assignee: 'p2', dueDate: t7, reminderEnabled: false, completed: false, createdAt: Date.now() - 20000 },
+            { id: 't6', title: 'エアコンフィルター掃除', memo: '時間ある週末に', assignee: 'p1', dueDate: '', reminderEnabled: false, completed: false, createdAt: Date.now() - 15000 },
+            { id: 't7', title: '防災リュックの水の賞味期限チェック', memo: '', assignee: 'both', dueDate: '', reminderEnabled: false, completed: false, createdAt: Date.now() - 10000 },
+            { id: 't8', title: '牛乳と食パン買う', memo: '', assignee: 'p1', dueDate: todayYMD, reminderEnabled: false, completed: true, createdAt: Date.now() - 90000 }
+          ],
+          events: [
+            { id: 'e1', title: 'パパ 大阪出張', startDate: t4, endDate: t5, owner: 'p1' },
+            { id: 'e2', title: '保育参観ウィーク', startDate: t7, endDate: t9, owner: 'both' }
+          ]
+        };
+      }
+
+      function safeLoad(key, fallback) {
+        try {
+          const raw = localStorage.getItem(key);
+          return raw ? JSON.parse(raw) : fallback;
+        } catch (e) {
+          return fallback;
+        }
+      }
+      function safeSave(key, val) {
+        try {
+          localStorage.setItem(key, JSON.stringify(val));
+        } catch (e) {}
+      }
+
+      let db = safeLoad(STORAGE_KEY, null);
+      if (!db) {
+        db = buildDefaultData();
+        safeSave(STORAGE_KEY, db);
+      }
+      let myRole = safeLoad(DEVICE_ROLE_KEY, 'p1'); // 'p1' | 'p2'
+      let isAuthed = safeLoad(AUTH_KEY, false);
+
+      // UI View State
+      let viewWeeks = 2; // 1 | 2 | 4 | 8
+      let viewStartMonday = getMondayOfWeek(today);
+      let selectedDate = todayYMD;
+      let showCompleted = false;
+      let showQuickOptions = true;
+
+      // Quick Task Form State
+      let qtAssignee = 'both';
+      let qtDueType = 'today'; // 'today' | 'tomorrow' | 'weekend' | 'anytime' | 'custom'
+      let qtReminder = true;
+      let qeOwner = 'p1';
+
+      // Undo State
+      let lastUndo = null;
+      let undoTimer = null;
+
+      // ==========================================
+      // DOM Elements
+      // ==========================================
+      const pinOverlay = document.getElementById('pin-overlay');
+      const pinDots = document.querySelectorAll('.pin-dot');
+      const pinError = document.getElementById('pin-error');
+      let pinBuffer = '';
+
+      const setupModal = document.getElementById('setup-modal');
+      const setupCloseBtn = document.getElementById('setup-close-btn');
+      const inputP1Name = document.getElementById('input-p1-name');
+      const inputP2Name = document.getElementById('input-p2-name');
+      const roleBtnP1 = document.getElementById('role-btn-p1');
+      const roleBtnP2 = document.getElementById('role-btn-p2');
+      const roleLabelP1 = document.getElementById('role-label-p1');
+      const roleLabelP2 = document.getElementById('role-label-p2');
+      const inputRoomPin = document.getElementById('input-room-pin');
+      const roomUrlPreview = document.getElementById('room-url-preview');
+
+      // ==========================================
+      // Auth (4-Digit PIN)
+      // ==========================================
+      function checkAuthAndSetup() {
+        if (!isAuthed) {
+          pinOverlay.classList.remove('hidden');
+        } else if (!db.room.configured) {
+          openSetupModal(true);
+        }
+      }
+
+      function updatePinDots() {
+        pinDots.forEach((dot, idx) => {
+          if (idx < pinBuffer.length) {
+            dot.classList.add('bg-[#E06D53]', 'border-[#E06D53]');
+            dot.classList.remove('bg-white', 'border-stone-300');
+          } else {
+            dot.classList.remove('bg-[#E06D53]', 'border-[#E06D53]');
+            dot.classList.add('bg-white', 'border-stone-300');
+          }
+        });
+      }
+
+      function tryPinUnlock() {
+        if (pinBuffer === db.room.pin) {
+          isAuthed = true;
+          safeSave(AUTH_KEY, true);
+          pinOverlay.classList.add('hidden');
+          pinBuffer = '';
+          pinError.textContent = '';
+          if (!db.room.configured) {
+            openSetupModal(true);
+          }
+        } else {
+          pinError.textContent = 'PINが違います（デモPIN: 1234）';
+          pinBuffer = '';
+          setTimeout(updatePinDots, 250);
+        }
+      }
+
+      document.querySelectorAll('.pin-key').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          if (pinBuffer.length >= 4) return;
+          pinBuffer += btn.dataset.pin;
+          pinError.textContent = '';
+          updatePinDots();
+          if (pinBuffer.length === 4) {
+            setTimeout(tryPinUnlock, 120);
+          }
+        });
+      });
+
+      document.getElementById('pin-backspace').addEventListener('click', () => {
+        pinBuffer = pinBuffer.slice(0, -1);
+        updatePinDots();
+      });
+
+      document.getElementById('pin-demo-btn').addEventListener('click', () => {
+        pinBuffer = db.room.pin;
+        updatePinDots();
+        setTimeout(tryPinUnlock, 120);
+      });
+
+      // ==========================================
+      // Setup / Settings Modal
+      // ==========================================
+      let tempRole = myRole;
+      function openSetupModal(isFirstTime) {
+        inputP1Name.value = db.room.partner1Name;
+        inputP2Name.value = db.room.partner2Name;
+        inputRoomPin.value = db.room.pin;
+        tempRole = myRole;
+        updateRoleCards();
+        const shareUrl = `${window.location.href.split('?')[0]}?room=${ROOM_ID}`;
+        roomUrlPreview.textContent = shareUrl;
+        document.getElementById('setup-title').textContent = isFirstTime ? 'ふたりの初期設定' : 'ルーム設定';
+        setupCloseBtn.classList.toggle('hidden', isFirstTime);
+        setupModal.classList.remove('hidden');
+      }
+
+      function updateRoleCards() {
+        const n1 = inputP1Name.value.trim() || 'パートナー1';
+        const n2 = inputP2Name.value.trim() || 'パートナー2';
+        roleLabelP1.textContent = n1;
+        roleLabelP2.textContent = n2;
+
+        if (tempRole === 'p1') {
+          roleBtnP1.className = 'tap-btn py-3 px-3 rounded-xl border-2 border-[#E06D53] bg-[#FDF0ED] text-[#E06D53] text-sm font-bold flex items-center justify-center gap-2';
+          roleBtnP2.className = 'tap-btn py-3 px-3 rounded-xl border-2 border-stone-200 bg-white text-stone-600 text-sm font-bold flex items-center justify-center gap-2';
+        } else {
+          roleBtnP1.className = 'tap-btn py-3 px-3 rounded-xl border-2 border-stone-200 bg-white text-stone-600 text-sm font-bold flex items-center justify-center gap-2';
+          roleBtnP2.className = 'tap-btn py-3 px-3 rounded-xl border-2 border-[#2A8C82] bg-[#EAF6F4] text-[#2A8C82] text-sm font-bold flex items-center justify-center gap-2';
+        }
+      }
+
+      inputP1Name.addEventListener('input', updateRoleCards);
+      inputP2Name.addEventListener('input', updateRoleCards);
+      roleBtnP1.addEventListener('click', () => { tempRole = 'p1'; updateRoleCards(); });
+      roleBtnP2.addEventListener('click', () => { tempRole = 'p2'; updateRoleCards(); });
+      setupCloseBtn.addEventListener('click', () => setupModal.classList.add('hidden'));
+      document.getElementById('open-settings-btn').addEventListener('click', () => openSetupModal(false));
+      document.getElementById('header-role-btn').addEventListener('click', () => openSetupModal(false));
+
+      document.getElementById('setup-save-btn').addEventListener('click', () => {
+        const p1 = inputP1Name.value.trim() || 'パパ';
+        const p2 = inputP2Name.value.trim() || 'ママ';
+        const newPin = inputRoomPin.value.replace(/\D/g, '').slice(0, 4);
+        db.room.partner1Name = p1;
+        db.room.partner2Name = p2;
+        if (newPin.length === 4) db.room.pin = newPin;
+        db.room.configured = true;
+        myRole = tempRole;
+        safeSave(STORAGE_KEY, db);
+        safeSave(DEVICE_ROLE_KEY, myRole);
+        setupModal.classList.add('hidden');
+        renderAll();
+      });
+
+      document.getElementById('copy-room-url-btn').addEventListener('click', () => {
+        const url = roomUrlPreview.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(url).catch(() => fallbackCopy(url));
+        } else {
+          fallbackCopy(url);
+        }
+        showPushBanner('URLをコピーしました', 'パートナーにLINE等で送って同じPINで入れます');
+      });
+
+      function fallbackCopy(text) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+
+      // Demo simulation buttons
+      document.getElementById('sim-partner-add-btn').addEventListener('click', () => {
+        const partnerRole = myRole === 'p1' ? 'p2' : 'p1';
+        const partnerName = partnerRole === 'p1' ? db.room.partner1Name : db.room.partner2Name;
+        const newTask = {
+          id: 't_' + Date.now(),
+          title: '帰りに牛乳1本買ってきて',
+          memo: '冷蔵庫空っぽです！',
+          assignee: myRole,
+          dueDate: todayYMD,
+          reminderEnabled: true,
+          completed: false,
+          createdAt: Date.now()
+        };
+        db.tasks.unshift(newTask);
+        safeSave(STORAGE_KEY, db);
+        setupModal.classList.add('hidden');
+        renderAll();
+        showPushBanner(`通知A: ${partnerName}が新しいタスクを追加`, `${newTask.title}（今日）`);
+      });
+
+      document.getElementById('reset-demo-btn').addEventListener('click', () => {
+        db = buildDefaultData();
+        db.room.configured = true;
+        safeSave(STORAGE_KEY, db);
+        setupModal.classList.add('hidden');
+        renderAll();
+        showPushBanner('デモデータを初期化しました', 'サンプルタスクと予定を再読み込みしました');
+      });
+
+      // ==========================================
+      // Notification Banner & Permission
+      // ==========================================
+      let bannerTimer = null;
+      function showPushBanner(title, body) {
+        const banner = document.getElementById('push-banner');
+        document.getElementById('push-banner-title').textContent = title;
+        document.getElementById('push-banner-body').textContent = body;
+        banner.classList.remove('hidden');
+        clearTimeout(bannerTimer);
+        bannerTimer = setTimeout(() => banner.classList.add('hidden'), 4500);
+      }
+      document.getElementById('push-banner-close').addEventListener('click', () => {
+        document.getElementById('push-banner').classList.add('hidden');
+      });
+
+      document.getElementById('notif-btn').addEventListener('click', async () => {
+        if (typeof Notification !== 'undefined' && Notification.requestPermission) {
+          try {
+            const perm = await Notification.requestPermission();
+            if (perm === 'granted') {
+              showPushBanner('通知が許可されました', 'パートナーの追加や期限前リマインドが届きます');
+              document.getElementById('notif-dot').classList.add('hidden');
+              return;
+            }
+          } catch (e) {}
+        }
+        showPushBanner('デモモード通知プレビュー', '本番デプロイ時はFCM経由でiPhone/Androidにプッシュ通知が届きます');
+      });
+
+      // ==========================================
+      // Color & Label Helpers
+      // ==========================================
+      function getAssigneeMeta(assignee) {
+        if (assignee === 'p1') {
+          return { name: db.room.partner1Name, color: '#E06D53', bg: '#FDF0ED', text: '#B84B33', dot: 'bg-[#E06D53]' };
+        }
+        if (assignee === 'p2') {
+          return { name: db.room.partner2Name, color: '#2A8C82', bg: '#EAF6F4', text: '#1D6A62', dot: 'bg-[#2A8C82]' };
+        }
+        return { name: 'どっちでも', color: '#D98A2B', bg: '#FEF6EA', text: '#A86619', dot: 'bg-[#D98A2B]' };
+      }
+
+      // ==========================================
+      // Render Functions
+      // ==========================================
+      function renderHeader() {
+        const name = myRole === 'p1' ? db.room.partner1Name : db.room.partner2Name;
+        document.getElementById('header-role-name').textContent = name;
+        const dot = document.getElementById('header-role-dot');
+        dot.style.backgroundColor = myRole === 'p1' ? '#E06D53' : '#2A8C82';
+        document.getElementById('legend-p1').textContent = db.room.partner1Name;
+        document.getElementById('legend-p2').textContent = db.room.partner2Name;
+      }
+
+      function renderAnytimeTray() {
+        const listEl = document.getElementById('anytime-list');
+        const anytimeTasks = db.tasks.filter((t) => !t.completed && !t.dueDate);
+        document.getElementById('anytime-count').textContent = anytimeTasks.length;
+
+        if (anytimeTasks.length === 0) {
+          listEl.innerHTML = '<span class="text-xs text-stone-400">期限なしタスクはありません</span>';
+          return;
+        }
+
+        listEl.innerHTML = anytimeTasks.map((t) => {
+          const meta = getAssigneeMeta(t.assignee);
+          return `
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl border border-stone-200 bg-stone-50/70 max-w-full">
+              <button type="button" data-complete-id="${t.id}" class="tap-btn w-4 h-4 rounded border border-stone-400 bg-white flex items-center justify-center shrink-0 hover:border-[#E06D53]" aria-label="完了にする"></button>
+              <span class="w-2 h-2 rounded-full shrink-0" style="background:${meta.color}"></span>
+              <span class="text-xs font-medium text-stone-700 truncate max-w-[180px]">${escapeHtml(t.title)}</span>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderCalendar() {
+        const gridEl = document.getElementById('calendar-grid');
+        const totalDays = viewWeeks * 7;
+        const endDate = addDays(viewStartMonday, totalDays - 1);
+        document.getElementById('cal-range-label').textContent = `${formatShortMD(viewStartMonday)} 〜 ${formatShortMD(endDate)}`;
+
+        // Update week tab styles
+        document.querySelectorAll('.week-tab').forEach((btn) => {
+          const w = Number(btn.dataset.weeks);
+          if (w === viewWeeks) {
+            btn.className = 'week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-bold bg-white text-stone-900 shadow-2xs';
+          } else {
+            btn.className = 'week-tab tap-btn px-2.5 py-1 rounded-lg text-xs font-semibold text-stone-500 hover:text-stone-700';
+          }
+        });
+
+        const isCompactDotMode = viewWeeks >= 4;
+        const activeTasks = db.tasks.filter((t) => !t.completed && t.dueDate);
+
+        let html = '';
+        for (let w = 0; w < viewWeeks; w++) {
+          const weekStart = addDays(viewStartMonday, w * 7);
+          const weekEnd = addDays(weekStart, 6);
+          const weekStartYMD = toYMD(weekStart);
+          const weekEndYMD = toYMD(weekEnd);
+
+          // Multi-day events overlapping this week
+          const weekEvents = db.events.filter((ev) => !(ev.endDate < weekStartYMD || ev.startDate > weekEndYMD));
+
+          html += `<div class="space-y-0.5">`;
+
+          // Render multi-day event horizontal bands across 7 columns
+          weekEvents.forEach((ev) => {
+            let startCol = 0;
+            let endCol = 6;
+            for (let c = 0; c < 7; c++) {
+              const cYMD = toYMD(addDays(weekStart, c));
+              if (cYMD === ev.startDate) startCol = c;
+              if (cYMD === ev.endDate) endCol = c;
+            }
+            if (ev.startDate < weekStartYMD) startCol = 0;
+            if (ev.endDate > weekEndYMD) endCol = 6;
+            const span = endCol - startCol + 1;
+            const bgClass = ev.owner === 'p1' ? 'bg-[#FDF0ED] text-[#B84B33] border-[#E06D53]/40'
+              : ev.owner === 'p2' ? 'bg-[#EAF6F4] text-[#1D6A62] border-[#2A8C82]/40'
+              : 'bg-[#EEF2FF] text-[#3730A3] border-[#818CF8]/40';
+
+            html += `<div class="grid grid-cols-7 gap-1">`;
+            if (startCol > 0) html += `<div style="grid-column: span ${startCol} / span ${startCol}"></div>`;
+            html += `
+              <div style="grid-column: span ${span} / span ${span}" class="px-1.5 py-0.5 rounded-md border text-[10px] font-bold truncate ${bgClass}">
+                📅 ${escapeHtml(ev.title)}
+              </div>
+            `;
+            html += `</div>`;
+          });
+
+          // Day cells row
+          html += `<div class="grid grid-cols-7 gap-1">`;
+          for (let dIdx = 0; dIdx < 7; dIdx++) {
+            const cellDate = addDays(weekStart, dIdx);
+            const cellYMD = toYMD(cellDate);
+            const isToday = cellYMD === todayYMD;
+            const isSelected = cellYMD === selectedDate;
+            const dayTasks = activeTasks.filter((t) => t.dueDate === cellYMD);
+            const hasEvent = weekEvents.some((ev) => cellYMD >= ev.startDate && cellYMD <= ev.endDate);
+
+            const dayNum = cellDate.getDate();
+            const dateLabel = dayNum === 1 ? `${cellDate.getMonth() + 1}/1` : `${dayNum}`;
+
+            let cellBorder = 'border-stone-100 bg-stone-50/40';
+            if (hasEvent) cellBorder = 'border-indigo-100 bg-indigo-50/30';
+            if (isSelected) cellBorder = 'border-[#E06D53] bg-[#FDF0ED]/35 ring-1 ring-[#E06D53]';
+
+            const minH = isCompactDotMode ? 'min-h-[52px]' : 'min-h-[76px] sm:min-h-[88px]';
+            const dayTextColor = dIdx === 5 ? 'text-sky-600' : dIdx === 6 ? 'text-rose-500' : 'text-stone-700';
+
+            html += `
+              <button type="button" data-select-date="${cellYMD}" class="tap-btn text-left rounded-xl border p-1 flex flex-col justify-between ${minH} ${cellBorder} hover:border-stone-300 overflow-hidden">
+                <div class="flex items-center justify-between w-full">
+                  <span class="text-[11px] font-bold leading-none px-1 py-0.5 rounded-md ${isToday ? 'bg-[#E06D53] text-white' : dayTextColor}">${dateLabel}</span>
+                </div>
+                <div class="mt-1 w-full space-y-0.5">
+            `;
+
+            if (isCompactDotMode) {
+              // 4W / 8W: Color dots + count per assignee
+              const c1 = dayTasks.filter((t) => t.assignee === 'p1').length;
+              const c2 = dayTasks.filter((t) => t.assignee === 'p2').length;
+              const cb = dayTasks.filter((t) => t.assignee === 'both').length;
+              if (dayTasks.length > 0) {
+                html += `<div class="flex flex-wrap items-center gap-1 pt-0.5">`;
+                if (c1 > 0) html += `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#E06D53]"><span class="w-1.5 h-1.5 rounded-full bg-[#E06D53]"></span>${c1}</span>`;
+                if (c2 > 0) html += `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#2A8C82]"><span class="w-1.5 h-1.5 rounded-full bg-[#2A8C82]"></span>${c2}</span>`;
+                if (cb > 0) html += `<span class="inline-flex items-center gap-0.5 text-[10px] font-bold text-[#D98A2B]"><span class="w-1.5 h-1.5 rounded-full bg-[#D98A2B]"></span>${cb}</span>`;
+                html += `</div>`;
+              }
+            } else {
+              // 1W / 2W: Text badges with assignee color
+              const visible = dayTasks.slice(0, 3);
+              visible.forEach((t) => {
+                const meta = getAssigneeMeta(t.assignee);
+                html += `
+                  <div class="text-[10px] leading-tight font-medium px-1 py-0.5 rounded truncate border-l-2" style="background:${meta.bg}; color:${meta.text}; border-color:${meta.color}">
+                    ${escapeHtml(t.title)}
+                  </div>
+                `;
+              });
+              if (dayTasks.length > 3) {
+                html += `<div class="text-[9px] font-bold text-stone-400 pl-0.5">+${dayTasks.length - 3}件</div>`;
+              }
+            }
+
+            html += `</div></button>`;
+          }
+          html += `</div></div>`;
+        }
+
+        gridEl.innerHTML = html;
+      }
+
+      function renderSelectedDayDetail() {
+        document.getElementById('selected-day-title').textContent = formatJPDate(selectedDate);
+        const dayTasks = db.tasks.filter((t) => !t.completed && t.dueDate === selectedDate);
+        const dayEvents = db.events.filter((ev) => selectedDate >= ev.startDate && selectedDate <= ev.endDate);
+
+        document.getElementById('selected-day-subtitle').textContent =
+          dayTasks.length === 0 && dayEvents.length === 0 ? '予定・タスクはありません' : `タスク ${dayTasks.length}件 / 複数日予定 ${dayEvents.length}件`;
+
+        const eventsEl = document.getElementById('selected-day-events');
+        eventsEl.innerHTML = dayEvents.map((ev) => `
+          <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-[#EEF2FF] border border-[#818CF8]/40 text-xs">
+            <div class="font-bold text-[#3730A3]">📅 ${escapeHtml(ev.title)} <span class="font-normal text-[11px] opacity-75">(${ev.startDate.slice(5)} 〜 ${ev.endDate.slice(5)})</span></div>
+            <button type="button" data-delete-event="${ev.id}" class="text-indigo-400 hover:text-indigo-700 px-1.5" title="予定を削除">✕</button>
+          </div>
+        `).join('');
+
+        const tasksEl = document.getElementById('selected-day-tasks');
+        if (dayTasks.length === 0) {
+          tasksEl.innerHTML = '';
+          return;
+        }
+
+        tasksEl.innerHTML = dayTasks.map((t) => {
+          const meta = getAssigneeMeta(t.assignee);
+          return `
+            <div class="flex items-start gap-2.5 p-2.5 rounded-xl border border-stone-200/80 bg-stone-50/50">
+              <button type="button" data-complete-id="${t.id}" class="tap-btn mt-0.5 w-5 h-5 rounded-md border-2 border-stone-300 bg-white flex items-center justify-center shrink-0 hover:border-[#E06D53]" aria-label="完了にする"></button>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                  <span class="text-sm font-semibold text-stone-800">${escapeHtml(t.title)}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold" style="background:${meta.bg}; color:${meta.text}">${escapeHtml(meta.name)}</span>
+                  ${t.reminderEnabled ? '<span class="text-[10px] text-amber-600 font-semibold" title="期限前リマインドON">🔔通知ON</span>' : ''}
+                </div>
+                ${t.memo ? `<p class="text-xs text-stone-500 mt-0.5">${escapeHtml(t.memo)}</p>` : ''}
+              </div>
+              <button type="button" data-delete-task="${t.id}" class="text-stone-300 hover:text-red-500 p-1 text-xs" title="削除">✕</button>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderCompletedSection() {
+        const completed = db.tasks.filter((t) => t.completed);
+        document.getElementById('completed-count').textContent = completed.length;
+        const listEl = document.getElementById('completed-list');
+
+        if (completed.length === 0) {
+          listEl.innerHTML = '<p class="text-xs text-stone-400">完了済みのタスクはまだありません</p>';
+          return;
+        }
+
+        listEl.innerHTML = completed.map((t) => {
+          const meta = getAssigneeMeta(t.assignee);
+          return `
+            <div class="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl bg-stone-100/70 text-stone-400">
+              <div class="flex items-center gap-2 min-w-0">
+                <button type="button" data-uncomplete-id="${t.id}" class="tap-btn w-4 h-4 rounded bg-stone-400 text-white flex items-center justify-center text-[10px] shrink-0" title="未完了に戻す">✓</button>
+                <span class="text-xs line-through truncate">${escapeHtml(t.title)}</span>
+                <span class="text-[10px] shrink-0">(${escapeHtml(meta.name)})</span>
+              </div>
+              <button type="button" data-delete-task="${t.id}" class="text-[11px] hover:text-red-500 px-1">削除</button>
+            </div>
+          `;
+        }).join('');
+      }
+
+      function renderQuickInputControls() {
+        // Assignee buttons
+        document.querySelectorAll('.qt-assignee-btn').forEach((btn) => {
+          const role = btn.dataset.assignee;
+          if (role === 'p1') btn.textContent = db.room.partner1Name;
+          if (role === 'p2') btn.textContent = db.room.partner2Name;
+          if (role === 'both') btn.textContent = 'どっちでも';
+
+          const meta = getAssigneeMeta(role);
+          if (qtAssignee === role) {
+            btn.style.backgroundColor = meta.bg;
+            btn.style.borderColor = meta.color;
+            btn.style.color = meta.text;
+          } else {
+            btn.style.backgroundColor = '#FFFFFF';
+            btn.style.borderColor = '#E7E5E4';
+            btn.style.color = '#78716C';
+          }
+        });
+
+        // Event owner buttons
+        document.querySelectorAll('.qe-owner-btn').forEach((btn) => {
+          const role = btn.dataset.evOwner;
+          if (role === 'p1') btn.textContent = db.room.partner1Name;
+          if (role === 'p2') btn.textContent = db.room.partner2Name;
+          if (role === 'both') btn.textContent = 'ふたり';
+
+          if (qeOwner === role) {
+            btn.className = 'qe-owner-btn tap-btn px-2 py-1 rounded-full text-[11px] font-bold border border-indigo-500 bg-indigo-50 text-indigo-700';
+          } else {
+            btn.className = 'qe-owner-btn tap-btn px-2 py-1 rounded-full text-[11px] font-bold border border-stone-200 bg-white text-stone-500';
+          }
+        });
+
+        // Due chips
+        document.querySelectorAll('.qt-due-chip').forEach((btn) => {
+          const active = btn.dataset.due === qtDueType;
+          btn.className = active
+            ? 'qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-bold border border-[#E06D53] bg-[#FDF0ED] text-[#E06D53]'
+            : 'qt-due-chip tap-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold border border-stone-200 bg-white text-stone-600';
+        });
+
+        // Reminder toggle
+        const remBtn = document.getElementById('qt-reminder-btn');
+        const remLabel = document.getElementById('qt-reminder-label');
+        if (qtReminder) {
+          remBtn.className = 'tap-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border border-amber-400 bg-amber-50 text-amber-800';
+          remLabel.textContent = '期限前通知 ON';
+        } else {
+          remBtn.className = 'tap-btn inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-stone-200 bg-white text-stone-400';
+          remLabel.textContent = '通知 OFF';
+        }
+      }
+
+      function renderAll() {
+        renderHeader();
+        renderAnytimeTray();
+        renderCalendar();
+        renderSelectedDayDetail();
+        renderCompletedSection();
+        renderQuickInputControls();
+      }
+
+      // ==========================================
+      // Event Listeners & Mutations
+      // ==========================================
+      // Week Switcher
+      document.querySelectorAll('.week-tab').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          viewWeeks = Number(btn.dataset.weeks);
+          renderCalendar();
+        });
+      });
+
+      document.getElementById('cal-prev-btn').addEventListener('click', () => {
+        viewStartMonday = addDays(viewStartMonday, -7 * (viewWeeks >= 4 ? 2 : 1));
+        renderCalendar();
+      });
+      document.getElementById('cal-next-btn').addEventListener('click', () => {
+        viewStartMonday = addDays(viewStartMonday, 7 * (viewWeeks >= 4 ? 2 : 1));
+        renderCalendar();
+      });
+      document.getElementById('cal-today-btn').addEventListener('click', () => {
+        viewStartMonday = getMondayOfWeek(today);
+        selectedDate = todayYMD;
+        renderCalendar();
+        renderSelectedDayDetail();
+      });
+
+      // Delegated clicks for calendar, tasks, events
+      document.addEventListener('click', (e) => {
+        const selectBtn = e.target.closest('[data-select-date]');
+        if (selectBtn) {
+          selectedDate = selectBtn.dataset.selectDate;
+          renderCalendar();
+          renderSelectedDayDetail();
+          return;
+        }
+
+        const compBtn = e.target.closest('[data-complete-id]');
+        if (compBtn) {
+          const id = compBtn.dataset.completeId;
+          const task = db.tasks.find((t) => t.id === id);
+          if (task) {
+            task.completed = true;
+            safeSave(STORAGE_KEY, db);
+            renderAll();
+            showUndoToast(`「${task.title}」を完了にしました`, () => {
+              task.completed = false;
+              safeSave(STORAGE_KEY, db);
+              renderAll();
+            });
+          }
+          return;
+        }
+
+        const uncompBtn = e.target.closest('[data-uncomplete-id]');
+        if (uncompBtn) {
+          const id = uncompBtn.dataset.uncompleteId;
+          const task = db.tasks.find((t) => t.id === id);
+          if (task) {
+            task.completed = false;
+            safeSave(STORAGE_KEY, db);
+            renderAll();
+          }
+          return;
+        }
+
+        const delTaskBtn = e.target.closest('[data-delete-task]');
+        if (delTaskBtn) {
+          const id = delTaskBtn.dataset.deleteTask;
+          const idx = db.tasks.findIndex((t) => t.id === id);
+          if (idx !== -1) {
+            const removed = db.tasks.splice(idx, 1)[0];
+            safeSave(STORAGE_KEY, db);
+            renderAll();
+            showUndoToast(`「${removed.title}」を削除しました`, () => {
+              db.tasks.splice(idx, 0, removed);
+              safeSave(STORAGE_KEY, db);
+              renderAll();
+            });
+          }
+          return;
+        }
+
+        const delEventBtn = e.target.closest('[data-delete-event]');
+        if (delEventBtn) {
+          const id = delEventBtn.dataset.deleteEvent;
+          const idx = db.events.findIndex((ev) => ev.id === id);
+          if (idx !== -1) {
+            const removed = db.events.splice(idx, 1)[0];
+            safeSave(STORAGE_KEY, db);
+            renderAll();
+            showUndoToast(`予定「${removed.title}」を削除しました`, () => {
+              db.events.splice(idx, 0, removed);
+              safeSave(STORAGE_KEY, db);
+              renderAll();
+            });
+          }
+        }
+      });
+
+      // Undo Toast
+      function showUndoToast(msg, undoFn) {
+        const toast = document.getElementById('undo-toast');
+        document.getElementById('undo-toast-msg').textContent = msg;
+        lastUndo = undoFn;
+        toast.classList.remove('hidden');
+        clearTimeout(undoTimer);
+        undoTimer = setTimeout(() => {
+          toast.classList.add('hidden');
+          lastUndo = null;
+        }, 5000);
+      }
+
+      document.getElementById('undo-action-btn').addEventListener('click', () => {
+        if (lastUndo) {
+          lastUndo();
+          lastUndo = null;
+        }
+        document.getElementById('undo-toast').classList.add('hidden');
+      });
+
+      // Completed section toggle
+      document.getElementById('toggle-completed-btn').addEventListener('click', () => {
+        showCompleted = !showCompleted;
+        document.getElementById('completed-list').classList.toggle('hidden', !showCompleted);
+        document.getElementById('completed-chevron').textContent = showCompleted ? '閉じる ▲' : '開く ▼';
+      });
+
+      // Quick Input Mode Switch (Task vs Multi-day Event)
+      const taskForm = document.getElementById('quick-task-form');
+      const eventForm = document.getElementById('quick-event-form');
+      const modeTaskBtn = document.getElementById('mode-task-btn');
+      const modeEventBtn = document.getElementById('mode-event-btn');
+
+      function switchInputMode(mode) {
+        if (mode === 'task') {
+          taskForm.classList.remove('hidden');
+          eventForm.classList.add('hidden');
+          modeTaskBtn.className = 'tap-btn px-3 py-1 rounded-lg text-xs font-bold bg-white text-stone-800 shadow-2xs';
+          modeEventBtn.className = 'tap-btn px-3 py-1 rounded-lg text-xs font-bold text-stone-500';
+        } else {
+          taskForm.classList.add('hidden');
+          eventForm.classList.remove('hidden');
+          modeEventBtn.className = 'tap-btn px-3 py-1 rounded-lg text-xs font-bold bg-white text-indigo-700 shadow-2xs';
+          modeTaskBtn.className = 'tap-btn px-3 py-1 rounded-lg text-xs font-bold text-stone-500';
+          document.getElementById('qe-start').value = selectedDate;
+          document.getElementById('qe-end').value = toYMD(addDays(parseYMD(selectedDate), 1));
+        }
+      }
+
+      modeTaskBtn.addEventListener('click', () => switchInputMode('task'));
+      modeEventBtn.addEventListener('click', () => switchInputMode('event'));
+
+      document.getElementById('toggle-quick-options-btn').addEventListener('click', (e) => {
+        showQuickOptions = !showQuickOptions;
+        document.getElementById('qt-options').classList.toggle('hidden', !showQuickOptions);
+        e.target.textContent = showQuickOptions ? '詳細オプション ▲' : '詳細オプション ▼';
+      });
+
+      // Quick Task Controls
+      document.querySelectorAll('.qt-assignee-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          qtAssignee = btn.dataset.assignee;
+          renderQuickInputControls();
+        });
+      });
+
+      document.querySelectorAll('.qe-owner-btn').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          qeOwner = btn.dataset.evOwner;
+          renderQuickInputControls();
+        });
+      });
+
+      const qtDateInput = document.getElementById('qt-date-input');
+      qtDateInput.value = todayYMD;
+
+      document.querySelectorAll('.qt-due-chip').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          qtDueType = btn.dataset.due;
+          if (qtDueType === 'today') qtDateInput.value = todayYMD;
+          else if (qtDueType === 'tomorrow') qtDateInput.value = toYMD(addDays(today, 1));
+          else if (qtDueType === 'weekend') qtDateInput.value = toYMD(getThisSunday(today));
+          else if (qtDueType === 'anytime') qtDateInput.value = '';
+          renderQuickInputControls();
+        });
+      });
+
+      qtDateInput.addEventListener('change', () => {
+        qtDueType = qtDateInput.value ? 'custom' : 'anytime';
+        renderQuickInputControls();
+      });
+
+      document.getElementById('qt-reminder-btn').addEventListener('click', () => {
+        qtReminder = !qtReminder;
+        renderQuickInputControls();
+      });
+
+      // Quick jump buttons ("+ この日に追加", "+ いつでもに追加")
+      document.getElementById('add-on-selected-day-btn').addEventListener('click', () => {
+        switchInputMode('task');
+        qtDueType = 'custom';
+        qtDateInput.value = selectedDate;
+        renderQuickInputControls();
+        document.getElementById('qt-title').focus();
+      });
+
+      document.getElementById('add-anytime-quick-btn').addEventListener('click', () => {
+        switchInputMode('task');
+        qtDueType = 'anytime';
+        qtDateInput.value = '';
+        renderQuickInputControls();
+        document.getElementById('qt-title').focus();
+      });
+
+      // Submit Task
+      taskForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const titleEl = document.getElementById('qt-title');
+        const memoEl = document.getElementById('qt-memo');
+        const title = titleEl.value.trim();
+        if (!title) return;
+
+        let dueDate = '';
+        if (qtDueType === 'today') dueDate = todayYMD;
+        else if (qtDueType === 'tomorrow') dueDate = toYMD(addDays(today, 1));
+        else if (qtDueType === 'weekend') dueDate = toYMD(getThisSunday(today));
+        else if (qtDueType === 'custom') dueDate = qtDateInput.value;
+
+        const newTask = {
+          id: 't_' + Date.now(),
+          title,
+          memo: memoEl.value.trim(),
+          assignee: qtAssignee,
+          dueDate,
+          reminderEnabled: qtReminder && !!dueDate,
+          completed: false,
+          createdAt: Date.now()
+        };
+
+        db.tasks.unshift(newTask);
+        safeSave(STORAGE_KEY, db);
+        if (dueDate) selectedDate = dueDate;
+        titleEl.value = '';
+        memoEl.value = '';
+        renderAll();
+
+        const myName = myRole === 'p1' ? db.room.partner1Name : db.room.partner2Name;
+        showPushBanner('登録しました（パートナーへ通知A送信）', `${myName}が「${title}」を追加しました`);
+      });
+
+      // Submit Multi-day Event
+      eventForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const titleEl = document.getElementById('qe-title');
+        const startEl = document.getElementById('qe-start');
+        const endEl = document.getElementById('qe-end');
+        const title = titleEl.value.trim();
+        if (!title || !startEl.value || !endEl.value) return;
+
+        const startDate = startEl.value <= endEl.value ? startEl.value : endEl.value;
+        const endDate = startEl.value <= endEl.value ? endEl.value : startEl.value;
+
+        db.events.push({
+          id: 'e_' + Date.now(),
+          title,
+          startDate,
+          endDate,
+          owner: qeOwner
+        });
+        safeSave(STORAGE_KEY, db);
+        selectedDate = startDate;
+        titleEl.value = '';
+        switchInputMode('task');
+        renderAll();
+        showPushBanner('複数日予定を登録しました', `${title}（${startDate.slice(5)}〜${endDate.slice(5)}）`);
+      });
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      // Initialize
+      renderAll();
+      checkAuthAndSetup();
+    })();
+  </script>
+
+  <script type="module">
+    // 本番モード（firebase-config.js 設定時）の自動有効化 & Service Worker 登録
+    (async function initPWAAndFirebase() {
+      if ('serviceWorker' in navigator) {
+        try {
+          await navigator.serviceWorker.register('./sw.js');
+        } catch (e) {
+          console.warn('SW registration skipped:', e);
+        }
+      }
+      const cfg = window.FUTARI_CONFIG;
+      if (!cfg || !cfg.firebase || !cfg.firebase.apiKey) return;
+
+      try {
+        const [{ initializeApp }, { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc }, { getMessaging, getToken }] = await Promise.all([
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
+          import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js')
+        ]);
+        const app = initializeApp(cfg.firebase);
+        const firestore = getFirestore(app);
+        const messaging = getMessaging(app);
+
+        const badge = document.getElementById('sync-badge');
+        if (badge) {
+          badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800';
+          badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>同期中';
+        }
+
+        window.__FUTARI_FIREBASE__ = { firestore, messaging, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getToken, cfg };
+      } catch (err) {
+        console.warn('Firebase init fallback to demo mode:', err);
+      }
+    })();
+  </script>
+</body>
+</html>
