@@ -494,7 +494,20 @@
         try {
           localStorage.setItem(key, JSON.stringify(val));
         } catch (e) {}
+        if (key === STORAGE_KEY && window.__FUTARI_CLOUD_SYNC__) {
+          window.__FUTARI_CLOUD_SYNC__.pushLocalState(val);
+        }
       }
+      window.__FUTARI_APPLY_CLOUD__ = function (cloudData) {
+        if (!cloudData) return;
+        if (cloudData.room) db.room = Object.assign({}, db.room, cloudData.room);
+        if (Array.isArray(cloudData.tasks)) db.tasks = cloudData.tasks;
+        if (Array.isArray(cloudData.events)) db.events = cloudData.events;
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(db)); } catch (e) {}
+        renderAll();
+      };
+      window.__FUTARI_GET_ROLE__ = function () { return myRole; };
+      window.__FUTARI_GET_ROOM_ID__ = function () { return ROOM_ID; };
 
       let db = safeLoad(STORAGE_KEY, null);
       if (!db) {
@@ -1282,6 +1295,9 @@
 
         const myName = myRole === 'p1' ? db.room.partner1Name : db.room.partner2Name;
         showPushBanner('登録しました（パートナーへ通知A送信）', `${myName}が「${title}」を追加しました`);
+        if (window.__FUTARI_CLOUD_SYNC__) {
+          window.__FUTARI_CLOUD_SYNC__.notifyPartnerAdd({ itemType: 'task', title, dueDate, senderRole: myName });
+        }
       });
 
       // Submit Multi-day Event
@@ -1293,73 +1309,168 @@
         const title = titleEl.value.trim();
         if (!title || !startEl.value || !endEl.value) return;
 
-        const startDate = startEl.value <= endEl.value ? startEl.value : endEl.value;
-        const endDate = startEl.value <= endEl.value ? endEl.value : startEl.value;
-
-        db.events.push({
-          id: 'e_' + Date.now(),
-          title,
-          startDate,
-          endDate,
-          owner: qeOwner
-        });
-        safeSave(STORAGE_KEY, db);
-        selectedDate = startDate;
-        titleEl.value = '';
-        switchInputMode('task');
-        renderAll();
-        showPushBanner('複数日予定を登録しました', `${title}（${startDate.slice(5)}〜${endDate.slice(5)}）`);
-      });
-
-      function escapeHtml(str) {
-        return String(str)
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
-      }
-
-      // Initialize
-      renderAll();
-      checkAuthAndSetup();
-    })();
-  </script>
-
-  <script type="module">
-    // 本番モード（firebase-config.js 設定時）の自動有効化 & Service Worker 登録
+        const startDate = st  <script type="module">
+    // 本番モード（firebase-config.js 設定時）の自動有効化 + Firestore リアルタイム同期 + FCM + GAS通知A
     (async function initPWAAndFirebase() {
+      let swReg = null;
       if ('serviceWorker' in navigator) {
         try {
-          await navigator.serviceWorker.register('./sw.js');
+          swReg = await navigator.serviceWorker.register('./sw.js');
         } catch (e) {
           console.warn('SW registration skipped:', e);
         }
       }
+
       const cfg = window.FUTARI_CONFIG;
       if (!cfg || !cfg.firebase || !cfg.firebase.apiKey) return;
 
       try {
-        const [{ initializeApp }, { getFirestore, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc }, { getMessaging, getToken }] = await Promise.all([
+        const [
+          { initializeApp },
+          { getFirestore, doc, collection, onSnapshot, setDoc, deleteDoc, getDocs },
+          { getMessaging, getToken }
+        ] = await Promise.all([
           import('https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js'),
           import('https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js'),
           import('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js')
         ]);
+
         const app = initializeApp(cfg.firebase);
         const firestore = getFirestore(app);
         const messaging = getMessaging(app);
+        const roomId = window.__FUTARI_GET_ROOM_ID__();
 
         const badge = document.getElementById('sync-badge');
         if (badge) {
           badge.className = 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-100 text-emerald-800';
           badge.innerHTML = '<span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>同期中';
         }
+        const demoBox = document.getElementById('demo-tools-box');
+        if (demoBox) demoBox.classList.add('hidden');
 
-        window.__FUTARI_FIREBASE__ = { firestore, messaging, doc, collection, onSnapshot, setDoc, updateDoc, deleteDoc, getToken, cfg };
+        const roomRef = doc(firestore, 'rooms', roomId);
+        const tasksCol = collection(firestore, 'rooms', roomId, 'tasks');
+        const eventsCol = collection(firestore, 'rooms', roomId, 'events');
+
+        let latestRoom = null;
+        let latestTasks = [];
+        let latestEvents = [];
+        let isApplyingRemote = false;
+
+        // 初期状態ではデモデータを消して空から始める（まだFirestoreにルームが無い場合）
+        const existingTasksSnap = await getDocs(tasksCol);
+        const existingEventsSnap = await getDocs(eventsCol);
+        if (existingTasksSnap.empty && existingEventsSnap.empty) {
+          window.__FUTARI_APPLY_CLOUD__({ tasks: [], events: [] });
+        }
+
+        onSnapshot(roomRef, (snap) => {
+          if (!snap.exists()) return;
+          latestRoom = snap.data();
+          isApplyingRemote = true;
+          window.__FUTARI_APPLY_CLOUD__({ room: latestRoom, tasks: latestTasks, events: latestEvents });
+          isApplyingRemote = false;
+        });
+
+        onSnapshot(tasksCol, (snap) => {
+          latestTasks = snap.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          isApplyingRemote = true;
+          window.__FUTARI_APPLY_CLOUD__({ room: latestRoom || undefined, tasks: latestTasks, events: latestEvents });
+          isApplyingRemote = false;
+        });
+
+        onSnapshot(eventsCol, (snap) => {
+          latestEvents = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+          isApplyingRemote = true;
+          window.__FUTARI_APPLY_CLOUD__({ room: latestRoom || undefined, tasks: latestTasks, events: latestEvents });
+          isApplyingRemote = false;
+        });
+
+        // FCMトークン取得・保存
+        async function registerFcmToken() {
+          if (!cfg.vapidKey || typeof Notification === 'undefined') return;
+          if (Notification.permission !== 'granted') return;
+          try {
+            const token = await getToken(messaging, {
+              vapidKey: cfg.vapidKey,
+              serviceWorkerRegistration: swReg || undefined
+            });
+            if (!token) return;
+            const role = window.__FUTARI_GET_ROLE__();
+            const field = role === 'p2' ? 'fcmToken2' : 'fcmToken1';
+            await setDoc(roomRef, { [field]: token }, { merge: true });
+          } catch (err) {
+            console.warn('FCM token error:', err);
+          }
+        }
+
+        const notifBtn = document.getElementById('notif-btn');
+        if (notifBtn) {
+          notifBtn.addEventListener('click', () => setTimeout(registerFcmToken, 800));
+        }
+        registerFcmToken();
+
+        window.__FUTARI_CLOUD_SYNC__ = {
+          async pushLocalState(val) {
+            if (isApplyingRemote) return;
+            try {
+              if (val.room) {
+                await setDoc(roomRef, {
+                  partner1Name: val.room.partner1Name,
+                  partner2Name: val.room.partner2Name,
+                  pin: val.room.pin,
+                  configured: !!val.room.configured
+                }, { merge: true });
+              }
+              const currentTaskIds = new Set((val.tasks || []).map((t) => t.id));
+              for (const t of val.tasks || []) {
+                await setDoc(doc(firestore, 'rooms', roomId, 'tasks', t.id), t, { merge: true });
+              }
+              for (const oldT of latestTasks) {
+                if (!currentTaskIds.has(oldT.id)) {
+                  await deleteDoc(doc(firestore, 'rooms', roomId, 'tasks', oldT.id));
+                }
+              }
+              const currentEventIds = new Set((val.events || []).map((ev) => ev.id));
+              for (const ev of val.events || []) {
+                await setDoc(doc(firestore, 'rooms', roomId, 'events', ev.id), ev, { merge: true });
+              }
+              for (const oldEv of latestEvents) {
+                if (!currentEventIds.has(oldEv.id)) {
+                  await deleteDoc(doc(firestore, 'rooms', roomId, 'events', oldEv.id));
+                }
+              }
+            } catch (e) {
+              console.warn('Firestore sync error:', e);
+            }
+          },
+          async notifyPartnerAdd({ itemType, title, dueDate, senderRole }) {
+            if (!cfg.gasWebhookUrl || !latestRoom) return;
+            const myRole = window.__FUTARI_GET_ROLE__();
+            const partnerToken = myRole === 'p1' ? latestRoom.fcmToken2 : latestRoom.fcmToken1;
+            if (!partnerToken) return;
+            try {
+              await fetch(cfg.gasWebhookUrl, {
+                method: 'POST',
+                mode: 'no-cors',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  roomId,
+                  senderRole,
+                  title,
+                  itemType,
+                  dueDate,
+                  targetTokens: [partnerToken]
+                })
+              });
+            } catch (e) {
+              console.warn('GAS webhook error:', e);
+            }
+          }
+        };
       } catch (err) {
         console.warn('Firebase init fallback to demo mode:', err);
       }
     })();
   </script>
 </body>
-</html>
