@@ -1309,7 +1309,42 @@
         const title = titleEl.value.trim();
         if (!title || !startEl.value || !endEl.value) return;
 
-        const startDate = st  <script type="module">
+        const startDate = startEl.value <= endEl.value ? startEl.value : endEl.value;
+        const endDate = startEl.value <= endEl.value ? endEl.value : startEl.value;
+
+        db.events.push({
+          id: 'e_' + Date.now(),
+          title,
+          startDate,
+          endDate,
+          owner: qeOwner
+        });
+        safeSave(STORAGE_KEY, db);
+        selectedDate = startDate;
+        titleEl.value = '';
+        switchInputMode('task');
+        renderAll();
+        showPushBanner('複数日予定を登録しました', `${title}（${startDate.slice(5)}〜${endDate.slice(5)}）`);
+        if (window.__FUTARI_CLOUD_SYNC__) {
+          window.__FUTARI_CLOUD_SYNC__.notifyPartnerAdd({ itemType: 'event', title, dueDate: startDate, senderRole: myName });
+        }
+      });
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      }
+
+      // Initialize
+      renderAll();
+      checkAuthAndSetup();
+    })();
+  </script>
+  <script type="module">
     // 本番モード（firebase-config.js 設定時）の自動有効化 + Firestore リアルタイム同期 + FCM + GAS通知A
     (async function initPWAAndFirebase() {
       let swReg = null;
@@ -1474,3 +1509,4 @@
     })();
   </script>
 </body>
+</html>
